@@ -43,7 +43,7 @@ def load_data():
         
         # 2. 패페 톤 학습 (요청 시트 상단 30개 데이터)
         # 30개 정도가 속도와 학습 퀄리티 면에서 가장 적당합니다.
-        archive = spreadsheet.worksheet("요청").get_all_values()
+        archive = spreadsheet.worksheet("rpa").get_all_values()
         
         # 헤더 제외, 상단부터 30개 데이터의 H열(인덱스 7) 캡션 수집
         # 데이터가 30개보다 적을 경우를 대비해 슬라이싱 처리
@@ -95,14 +95,14 @@ with col_in:
 
     b_wash = st.button("✨ 문구 워싱")
     b_make = st.button("✍️ 캡션 제작")
-    b_thumb = st.button("🖼️ 썸네일 추천")
+    b_thumb = st.button("🖼️ 썸네일 문구 추천")
 
 with col_out:
     st.markdown('<div class="section-title">3. 결과물 확인</div>', unsafe_allow_html=True)
     
     if b_wash:
         if raw_text:
-            with st.spinner("패페 스타일 리터칭 중..."):
+            with st.spinner("패페 스타일 워싱 중..."):
                 prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n패스트페이퍼 스타일로 워싱해줘."
                 res = call_ai(prompt)
                 st.markdown(f'<div class="content-box"><strong>[워싱 결과]</strong>\n\n{res}</div>', unsafe_allow_html=True)
