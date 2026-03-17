@@ -68,7 +68,7 @@ def call_ai(prompt, image_b64=None):
         
     # 2. 데이터 꾸러미 구성 (괄호 짝꿍 주의!)
     payload = {
-        "model": "google/gemini-2.0-flash-001", 
+        "model": "openrouter/free", 
         "messages": [
             {
                 "role": "user", 
