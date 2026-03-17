@@ -8,7 +8,7 @@ from docx import Document
 import io
 
 # --- 1. 기본 설정 및 디자인 ---
-st.set_page_config(page_title="패페 워싱봇 v2.1", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="패페 워싱봇 v2.2", page_icon="✍️", layout="wide")
 
 st.markdown("""
     <style>
@@ -53,7 +53,6 @@ def call_ai(prompt):
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     
     payload = {
-        # 오픈라우터 무료 모델
         "model": "openrouter/free", 
         "messages": [{"role": "user", "content": prompt}]
     }
@@ -83,7 +82,6 @@ with col_in:
     st.markdown('---')
     st.markdown('<div class="section-title">2. 작업 실행</div>', unsafe_allow_html=True)
     
-    # 동준님 요청: 볼드/이모티콘 금지 규칙
     strict_rule = "\n[⚠️ 절대 준수 규칙: 이모티콘 사용 금지. 볼드(**)나 # 등 마크다운 형식 금지. 오직 텍스트만 출력할 것.]"
 
     b_wash = st.button("✨ 문구 워싱")
@@ -95,66 +93,45 @@ with col_out:
     
     if b_wash:
         if raw_text:
-            with st.spinner("리터칭 중..."):
+            with st.spinner("패페 스타일 리터칭 중..."):
                 prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n패스트페이퍼 스타일로 워싱해줘."
                 res = call_ai(prompt)
                 st.markdown(f'<div class="content-box"><strong>[워싱 결과]</strong>\n\n{res}</div>', unsafe_allow_html=True)
-        else: st.warning("입력된 텍스트가 없습니다.")
+        else:
+            st.warning("내용을 입력해주세요.")
 
     if b_make:
         if raw_text:
-            with st.spinner("제작 중..."):
+            with st.spinner("인스타그램 캡션 제작 중..."):
                 prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}\n\n인스타그램용 캡션을 제작해줘."
                 res = call_ai(prompt)
                 st.markdown(f'<div class="content-box"><strong>[제작된 캡션]</strong>\n\n{res}</div>', unsafe_allow_html=True)
-        else: st.warning("입력된 텍스트가 없습니다.")
-
-   if b_thumb:
-        if not raw_text:
-            st.error("참고할 자료를 먼저 입력해주세요.")
         else:
-            with st.spinner("패스트페이퍼 썸네일 구상 중..."):
-                # 1. AI에게 줄 구체적인 예시 데이터 (보내주신 자료 기반)
-                few_shot_examples = """
+            st.warning("내용을 입력해주세요.")
+
+    if b_thumb:
+        if raw_text:
+            with st.spinner("패스트페이퍼급 썸네일 구상 중..."):
+                few_shot = """
                 [썸네일 제작 예시]
-                - 자료: 차정원의 마카오 여행 속 휠라 스니커즈 글리오 홍보
-                - 결과: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다 🔎
-                
-                - 자료: 장원영과 짐빔의 콜라보레이션 캠페인 소식
-                - 결과: 해냈어요. 짐빔이 해냈어요! 원영이 덕분에 세계관 대통합 완료
-                
-                - 자료: 테라의 새로운 모델로 등번호 7번 손흥민 발탁
-                - 결과: 큰 거 왔다. 테라랑 쏘니의 만남 COMING SON!
-                
-                - 자료: 정원규와 유니폼브릿지의 무신사 에디션 협업
-                - 결과: 환승연애에서 그 티셔츠, 기억하시나요? 정원규 X 유니폼브릿지
+                - 차정원 휠라 스니커즈: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다 
+                - 장원영 짐빔 콜라보: 해냈어요. 짐빔이 해냈어요! 원영이 덕분에 세계관 대통합 완료
+                - 테라 손흥민 발탁: 큰 거 왔다. 테라랑 쏘니의 만남 COMING SON!
+                - 정원규 유니폼브릿지: 환승연애에서 그 티셔츠, 기억하시나요? 정원규 X 유니폼브릿지
                 """
-
-                # 2. 메인 프롬프트 구성
-                prompt = f"""당신은 패스트페이퍼의 시니어 에디터입니다. 
-                제시된 자료를 바탕으로 인스타그램 썸네일용 문구 5개를 제안하세요.
-
-                {few_shot_examples}
-
-                [제작 가이드]
-                - 글자 수 : 공백 포함 20자 내외의 '임팩트 있는 한 줄'로 작성할 것.
-                - 스타일 : 잡지 헤드라인처럼 호기심을 유발하거나 질문을 던지는 형태 선호.
-                - 참고 : 브랜드명이나 인물 이름을 자연스럽게 녹일 것.
+                prompt = f"""당신은 패스트페이퍼의 시니어 에디터입니다.
+                {few_shot}
+                [가이드]
+                - 글자 수 20~30자 내외의 임팩트 있는 한 줄로 작성.
+                - 5개 번호를 매기고 문구 사이 빈 줄 추가.
+                - 최소 1개는 실시간 밈 활용: {meme_context}
                 - {strict_rule}
-                - 각 문구 사이에는 빈 줄을 넣어 가독성을 높이고 번호를 매길 것.
-
-                [실시간 밈 활용]
-                - 5개 중 최소 1개는 반드시 다음 밈을 섞어서 제작할 것: 
-                {meme_context}
-
-                [추가 요청]
-                {user_guide if user_guide else '없음'}
-
-                [자료]
-                {raw_text}
-                """
-                
+                [추가 요청] {user_guide}
+                [자료] {raw_text}"""
                 res = call_ai(prompt)
                 st.markdown(f'<div class="content-box"><strong>[썸네일 제안 5선]</strong>\n\n{res}</div>', unsafe_allow_html=True)
+        else:
+            st.warning("내용을 입력해주세요.")
+
 st.sidebar.markdown("---")
 st.sidebar.caption("© 2026 Fastpaper Washing Bot")
