@@ -109,12 +109,52 @@ with col_out:
                 st.markdown(f'<div class="content-box"><strong>[제작된 캡션]</strong>\n\n{res}</div>', unsafe_allow_html=True)
         else: st.warning("입력된 텍스트가 없습니다.")
 
-    if b_thumb:
-        with st.spinner("구상 중..."):
-            # 동준님 요청: 줄 구분 강화
-            prompt = f"{strict_rule}\n\n5개를 번호를 매겨 제안해줘. 문구 사이에는 빈 줄을 넣어 가독성을 높여줘.\n\n[실시간 밈]\n{meme_context}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}"
-            res = call_ai(prompt)
-            st.markdown(f'<div class="content-box"><strong>[썸네일 제안 5선]</strong>\n\n{res}</div>', unsafe_allow_html=True)
+   if b_thumb:
+        if not raw_text:
+            st.error("참고할 자료를 먼저 입력해주세요.")
+        else:
+            with st.spinner("패스트페이퍼 썸네일 구상 중..."):
+                # 1. AI에게 줄 구체적인 예시 데이터 (보내주신 자료 기반)
+                few_shot_examples = """
+                [썸네일 제작 예시]
+                - 자료: 차정원의 마카오 여행 속 휠라 스니커즈 글리오 홍보
+                - 결과: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다 🔎
+                
+                - 자료: 장원영과 짐빔의 콜라보레이션 캠페인 소식
+                - 결과: 해냈어요. 짐빔이 해냈어요! 원영이 덕분에 세계관 대통합 완료
+                
+                - 자료: 테라의 새로운 모델로 등번호 7번 손흥민 발탁
+                - 결과: 큰 거 왔다. 테라랑 쏘니의 만남 COMING SON!
+                
+                - 자료: 정원규와 유니폼브릿지의 무신사 에디션 협업
+                - 결과: 환승연애에서 그 티셔츠, 기억하시나요? 정원규 X 유니폼브릿지
+                """
 
+                # 2. 메인 프롬프트 구성
+                prompt = f"""당신은 패스트페이퍼의 시니어 에디터입니다. 
+                제시된 자료를 바탕으로 인스타그램 썸네일용 문구 5개를 제안하세요.
+
+                {few_shot_examples}
+
+                [제작 가이드]
+                - 글자 수 : 공백 포함 20자 내외의 '임팩트 있는 한 줄'로 작성할 것.
+                - 스타일 : 잡지 헤드라인처럼 호기심을 유발하거나 질문을 던지는 형태 선호.
+                - 참고 : 브랜드명이나 인물 이름을 자연스럽게 녹일 것.
+                - {strict_rule}
+                - 각 문구 사이에는 빈 줄을 넣어 가독성을 높이고 번호를 매길 것.
+
+                [실시간 밈 활용]
+                - 5개 중 최소 1개는 반드시 다음 밈을 섞어서 제작할 것: 
+                {meme_context}
+
+                [추가 요청]
+                {user_guide if user_guide else '없음'}
+
+                [자료]
+                {raw_text}
+                """
+                
+                res = call_ai(prompt)
+                st.markdown(f'<div class="content-box"><strong>[썸네일 제안 5선]</strong>\n\n{res}</div>', unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.caption("© 2026 Fastpaper Washing Bot")
