@@ -53,8 +53,8 @@ def call_ai(prompt):
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     
     payload = {
-        # 오픈라우터 무료 모델 중 가장 텍스트 한도가 넉넉한 모델로 고정
-        "model": "google/gemini-2.0-flash-lite-preview-02-05:free", 
+        # 오픈라우터 무료 모델
+        "model": "openrouter/free", 
         "messages": [{"role": "user", "content": prompt}]
     }
     
