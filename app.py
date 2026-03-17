@@ -8,7 +8,7 @@ from docx import Document
 import io
 
 # --- 1. 기본 설정 및 디자인 ---
-st.set_page_config(page_title="패페 워싱봇 v2.2", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="패페 워싱봇 v2.3", page_icon="✍️", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,6 +22,11 @@ st.markdown("""
     .section-title { font-size: 1.5rem; font-weight: 700; color: #000; margin-bottom: 15px; border-left: 5px solid #000; padding-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- 세션 상태 초기화 (결과 보존용) ---
+if 'res_wash' not in st.session_state: st.session_state.res_wash = ""
+if 'res_make' not in st.session_state: st.session_state.res_make = ""
+if 'res_thumb' not in st.session_state: st.session_state.res_thumb = ""
 
 # --- 2. 데이터 및 API 연동 ---
 def get_sheets_client():
@@ -38,15 +43,10 @@ def load_data():
     if not client: return [], "데이터 로드 실패"
     try:
         spreadsheet = client.open("fastpaper IG like RPA")
-        # 1. 밈 데이터 가져오기
         memes = spreadsheet.worksheet("밈").get_all_records()
-        
-        # 2. 패페 톤 학습 (요청 시트 상단 30개 데이터)
-        # 30개 정도가 속도와 학습 퀄리티 면에서 가장 적당합니다.
         archive = spreadsheet.worksheet("rpa").get_all_values()
         
-        # 헤더 제외, 상단부터 30개 데이터의 H열(인덱스 7) 캡션 수집
-        # 데이터가 30개보다 적을 경우를 대비해 슬라이싱 처리
+        # H열(인덱스 7) 캡션 수집
         style_samples = [row[7] for row in archive[1:31] if len(row) > 7 and row[7]]
         style = "\n\n".join(style_samples)
         
@@ -85,13 +85,15 @@ col_in, col_out = st.columns([1, 1])
 
 with col_in:
     st.markdown('<div class="section-title">1. 자료 입력</div>', unsafe_allow_html=True)
-    raw_text = st.text_area("📄 텍스트 입력 (원본/보도자료)", height=350, placeholder="여기에 내용을 붙여넣으세요.")
-    user_guide = st.text_input("💡 AI 제작 가이드", placeholder="예: '신제품 강조', '가격 정보 포함'")
+    raw_text = st.text_area("📄 텍스트 입력 (원본/보도자료)", height=300, placeholder="여기에 내용을 붙여넣으세요.")
+    # 수정사항 4: text_input -> text_area로 변경
+    user_guide = st.text_area("💡 AI 제작 가이드 (여러 줄 입력 가능)", height=150, placeholder="예:\n- 신제품 강조\n- 가격 정보 포함\n- 톤을 더 시니컬하게")
 
     st.markdown('---')
     st.markdown('<div class="section-title">2. 작업 실행</div>', unsafe_allow_html=True)
     
-    strict_rule = "\n[⚠️ 절대 준수 규칙: 이모티콘 사용 금지. 볼드(**)나 # 등 마크다운 형식 금지. 오직 텍스트만 출력할 것.]"
+    # 수정사항 2: 이모지 금지 및 길이 제한 추가
+    strict_rule = "\n[⚠️ 절대 준수 규칙: 이모티콘(이모지) 사용 절대 금지. 볼드(**)나 # 등 마크다운 형식 금지. 오직 순수 텍스트만 출력할 것.]"
 
     b_wash = st.button("✨ 문구 워싱")
     b_make = st.button("✍️ 캡션 제작")
@@ -100,30 +102,38 @@ with col_in:
 with col_out:
     st.markdown('<div class="section-title">3. 결과물 확인</div>', unsafe_allow_html=True)
     
+    # 수정사항 1: 세션 스테이트를 사용하여 버튼 클릭 시마다 결과 보존
+    
+    # 1) 문구 워싱 섹션
     if b_wash:
         if raw_text:
             with st.spinner("패페 스타일 워싱 중..."):
-                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n패스트페이퍼 스타일로 워싱해줘."
-                res = call_ai(prompt)
-                st.markdown(f'<div class="content-box"><strong>[워싱 결과]</strong>\n\n{res}</div>', unsafe_allow_html=True)
-        else:
-            st.warning("내용을 입력해주세요.")
+                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n수정사항 3 적용: 위 원본 내용을 패스트페이퍼 스타일로 워싱하되, 결과는 반드시 [기존문구] 내용 [워싱결과] 내용 형식을 지켜서 출력해줘."
+                st.session_state.res_wash = call_ai(prompt)
+        else: st.warning("내용을 입력해주세요.")
+    
+    if st.session_state.res_wash:
+        st.markdown(f'<div class="content-box"><strong>[문구 워싱 결과]</strong>\n\n{st.session_state.res_wash}</div>', unsafe_allow_html=True)
 
+    # 2) 캡션 제작 섹션
     if b_make:
         if raw_text:
             with st.spinner("인스타그램 캡션 제작 중..."):
-                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}\n\n인스타그램용 캡션을 제작해줘."
-                res = call_ai(prompt)
-                st.markdown(f'<div class="content-box"><strong>[제작된 캡션]</strong>\n\n{res}</div>', unsafe_allow_html=True)
-        else:
-            st.warning("내용을 입력해주세요.")
+                # 수정사항 2 적용: 이모지 금지 및 기존 캡션 길이 학습 강조
+                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}\n\n위 자료를 바탕으로 인스타그램용 캡션을 제작해줘. 이모티콘은 하나도 쓰지 말고, [말투 가이드]에 나온 기존 캡션들과 비슷한 수준의 길이로 간결하게 작성해줘."
+                st.session_state.res_make = call_ai(prompt)
+        else: st.warning("내용을 입력해주세요.")
 
+    if st.session_state.res_make:
+        st.markdown(f'<div class="content-box"><strong>[제작된 캡션]</strong>\n\n{st.session_state.res_make}</div>', unsafe_allow_html=True)
+
+    # 3) 썸네일 추천 섹션
     if b_thumb:
         if raw_text:
-            with st.spinner("아이디어 쥐어짜는중..."):
+            with st.spinner("아이디어 쥐어짜는 중..."):
                 few_shot = """
                 [썸네일 제작 예시]
-                - 차정원 휠라 스니커즈: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다 
+                - 차정원 휠라 스니커즈: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다
                 - 장원영 짐빔 콜라보: 해냈어요. 짐빔이 해냈어요! 원영이 덕분에 세계관 대통합 완료
                 - 테라 손흥민 발탁: 큰 거 왔다. 테라랑 쏘니의 만남 COMING SON!
                 - 정원규 유니폼브릿지: 환승연애에서 그 티셔츠, 기억하시나요? 정원규 X 유니폼브릿지
@@ -131,25 +141,23 @@ with col_out:
                 prompt = f"""당신은 패스트페이퍼의 시니어 에디터입니다.
                 {few_shot}
                 [가이드]
-                - **중요 : 글자 수 20~30자 내외의 임팩트 있는 한 줄로 작성.
-                - **중요 : 8개 번호를 매기고 문구 사이 빈 줄 추가.
+                - 중요 : 글자 수 20~30자 내외의 임팩트 있는 한 줄로 작성.
+                - 중요 : 8개 번호를 매기고 문구 사이 빈 줄 추가.
                 - 이모티콘 및 마크다운(볼드 등) 사용 절대 금지.
-                - **중요 : 8개 중 3개는 반드시 아래 밈을 섞어 '킹받게' 작성하고, 그 문구 바로 아래에 '(사용한 밈: 밈 이름 - 의미)' 형식으로 설명을 덧붙이세요.
+                - 중요 : 8개 중 3개는 반드시 아래 밈을 섞어 '킹받게' 작성하고, 그 문구 바로 아래에 '(사용한 밈: 밈 이름 - 의미)' 형식으로 설명을 덧붙이세요.
                 [실시간 밈 데이터]
                 {meme_context}
-                
                 [추가 가이드]
                 - {strict_rule}
                 - {user_guide if user_guide else '없음'}
-
                 [대상 자료]
                 {raw_text}
                 """
-               
-                res = call_ai(prompt)
-                st.markdown(f'<div class="content-box"><strong>[썸네일 제안 5선]</strong>\n\n{res}</div>', unsafe_allow_html=True)
-        else:
-            st.warning("내용을 입력해주세요.")
+                st.session_state.res_thumb = call_ai(prompt)
+        else: st.warning("내용을 입력해주세요.")
+
+    if st.session_state.res_thumb:
+        st.markdown(f'<div class="content-box"><strong>[썸네일 문구 제안]</strong>\n\n{st.session_state.res_thumb}</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
-st.sidebar.caption("© 2026 Fastpaper Washing Bot")
+st.sidebar.caption("© 2026 Fastpaper Washing Bot v2.3")
