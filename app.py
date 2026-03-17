@@ -51,25 +51,44 @@ def load_data():
         return [], "감각적인 매거진 톤을 유지하세요."
 
 def call_ai(prompt, image_b64=None):
+    """OpenRouter를 통해 Gemini 2.0 Flash 호출"""
+    if "openrouter_api_key" not in st.secrets:
+        return "오픈라우터 API 키가 설정되지 않았습니다."
+    
     api_key = st.secrets["openrouter_api_key"]
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     
+    # 1. 메시지 내용 구성
     content = [{"type": "text", "text": prompt}]
     if image_b64:
-        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}})
+        content.append({
+            "type": "image_url", 
+            "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}
+        })
         
-    # app.py의 call_ai 함수 내 payload 부분 찾기
+    # 2. 데이터 꾸러미 구성 (괄호 짝꿍 주의!)
     payload = {
-    "model": "google/gemini-pro-1.5-exp-0801", # 혹은 "google/gemini-2.0-flash-001"
-    "messages": [{"role": "user", "content": content}]
-}
+        "model": "google/gemini-2.0-flash-001", 
+        "messages": [
+            {
+                "role": "user", 
+                "content": content
+            }
+        ]
     }
     
     try:
+        # 3. 실제 전송
         res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        return res.json()['choices'][0]['message']['content']
-    except:
-        return "AI 연결 실패. 잠시 후 다시 시도하세요."
+        res_json = res.json()
+        
+        # 에러 메시지가 온 경우 처리
+        if "error" in res_json:
+            return f"AI 에러 발생: {res_json['error'].get('message', '알 수 없는 오류')}"
+            
+        return res_json['choices'][0]['message']['content']
+    except Exception as e:
+        return f"AI 호출 실패: {e}"
 
 def parse_document(file):
     if file.name.endswith('.txt'):
