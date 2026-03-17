@@ -38,12 +38,21 @@ def load_data():
     if not client: return [], "데이터 로드 실패"
     try:
         spreadsheet = client.open("fastpaper IG like RPA")
-        memes = spreadsheet.worksheet("trending_memes").get_all_records()
+        # 1. 밈 데이터 가져오기
+        memes = spreadsheet.worksheet("밈").get_all_records()
+        
+        # 2. 패페 톤 학습 (요청 시트 상단 30개 데이터)
+        # 30개 정도가 속도와 학습 퀄리티 면에서 가장 적당합니다.
         archive = spreadsheet.worksheet("요청").get_all_values()
-        style = "\n\n".join([row[3] for row in archive[-11:] if len(row) > 3])
+        
+        # 헤더 제외, 상단부터 30개 데이터의 H열(인덱스 7) 캡션 수집
+        # 데이터가 30개보다 적을 경우를 대비해 슬라이싱 처리
+        style_samples = [row[7] for row in archive[1:31] if len(row) > 7 and row[7]]
+        style = "\n\n".join(style_samples)
+        
         return memes, style
-    except:
-        return [], "매거진 톤 가이드를 불러올 수 없습니다."
+    except Exception as e:
+        return [], f"스타일 가이드를 불러올 수 없습니다: {e}"
 
 def call_ai(prompt):
     if "openrouter_api_key" not in st.secrets:
@@ -111,7 +120,7 @@ with col_out:
 
     if b_thumb:
         if raw_text:
-            with st.spinner("패스트페이퍼급 썸네일 구상 중..."):
+            with st.spinner("아이디어 쥐어짜는중..."):
                 few_shot = """
                 [썸네일 제작 예시]
                 - 차정원 휠라 스니커즈: 차정원의 마카오 여행 속 그 신발, 정체가 궁금합니다 
@@ -124,7 +133,8 @@ with col_out:
                 [가이드]
                 - 글자 수 20~30자 내외의 임팩트 있는 한 줄로 작성.
                 - 5개 번호를 매기고 문구 사이 빈 줄 추가.
-                - 최소 1개는 실시간 밈 활용: {meme_context}
+                - 이모티콘 사용 하지 않을것
+                - 최소 1개는 실시간 밈 활용, 밈을 적극적으로 섞어서 킹받게 써주고, 밈 사용한건 추가로 어떤 의미의 밈인지 기재 : {meme_context}
                 - {strict_rule}
                 [추가 요청] {user_guide}
                 [자료] {raw_text}"""
