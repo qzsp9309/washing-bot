@@ -145,9 +145,7 @@ with col_out:
                 [대상 자료]
                 {raw_text}
                 """
-                - {strict_rule}
-                [추가 요청] {user_guide}
-                [자료] {raw_text}"""
+               
                 res = call_ai(prompt)
                 st.markdown(f'<div class="content-box"><strong>[썸네일 제안 5선]</strong>\n\n{res}</div>', unsafe_allow_html=True)
         else:
