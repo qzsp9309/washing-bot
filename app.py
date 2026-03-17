@@ -80,7 +80,7 @@ col_in, col_out = st.columns([1, 1])
 with col_in:
     st.markdown('<div class="section-title">1. 자료 입력</div>', unsafe_allow_html=True)
     raw_text = st.text_area("📄 텍스트 입력 (원본/보도자료)", height=250)
-    user_guide = st.text_area("💡 AI 제작 가이드", height=120, placeholder="예: 이서준이 쓴 것처럼 적어줘")
+    user_guide = st.text_area("💡 AI 제작 가이드", height=120, placeholder="예: 원하는 내용을 기재하세요, 캡션은 유지해줘, 직접 체험한것처럼 써줘 등")
 
     st.markdown('---')
     st.markdown('<div class="section-title">2. 작업 실행</div>', unsafe_allow_html=True)
