@@ -8,7 +8,7 @@ from docx import Document
 import io
 
 # --- 1. 기본 설정 및 디자인 ---
-st.set_page_config(page_title="패페 워싱봇 v2.3", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="패페 워싱봇 v2.5", page_icon="✍️", layout="wide")
 
 st.markdown("""
     <style>
@@ -19,6 +19,9 @@ st.markdown("""
     .content-box { padding: 25px; border-radius: 0px; border: 1px solid #000; background-color: #fdfdfd; margin-bottom: 20px; white-space: pre-wrap; font-size: 1.1rem; line-height: 1.6; }
     .stButton>button { background-color: #000; color: #fff; border-radius: 0px; border: none; font-weight: 700; height: 3.5rem; transition: 0.3s; width: 100%; margin-bottom: 10px; }
     .stButton>button:hover { background-color: #333; color: #fff; border: none; }
+    /* 새로고침 버튼 전용 스타일 */
+    .refresh-btn>div>button { background-color: #fff !important; color: #ff4b4b !important; border: 1px solid #ff4b4b !important; }
+    .refresh-btn>div>button:hover { background-color: #ff4b4b !important; color: #fff !important; }
     .section-title { font-size: 1.5rem; font-weight: 700; color: #000; margin-bottom: 15px; border-left: 5px solid #000; padding-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
@@ -27,6 +30,12 @@ st.markdown("""
 if 'res_wash' not in st.session_state: st.session_state.res_wash = ""
 if 'res_make' not in st.session_state: st.session_state.res_make = ""
 if 'res_thumb' not in st.session_state: st.session_state.res_thumb = ""
+
+# --- 결과 초기화 함수 ---
+def reset_results():
+    st.session_state.res_wash = ""
+    st.session_state.res_make = ""
+    st.session_state.res_thumb = ""
 
 # --- 2. 데이터 및 API 연동 ---
 def get_sheets_client():
@@ -52,7 +61,7 @@ def load_data():
         
         return memes, style
     except Exception as e:
-        return [], f"스타일 가이드를 불러올 수 없습니다: {e}"
+        return [], f"스타일 가이드 실패: {e}"
 
 def call_ai(prompt):
     if "openrouter_api_key" not in st.secrets:
@@ -86,13 +95,18 @@ col_in, col_out = st.columns([1, 1])
 with col_in:
     st.markdown('<div class="section-title">1. 자료 입력</div>', unsafe_allow_html=True)
     raw_text = st.text_area("📄 텍스트 입력 (원본/보도자료)", height=300, placeholder="여기에 내용을 붙여넣으세요.")
-    # 수정사항 4: text_input -> text_area로 변경
     user_guide = st.text_area("💡 AI 제작 가이드 (여러 줄 입력 가능)", height=150, placeholder="예:\n- 신제품 강조\n- 가격 정보 포함\n- 톤을 더 시니컬하게")
 
     st.markdown('---')
     st.markdown('<div class="section-title">2. 작업 실행</div>', unsafe_allow_html=True)
     
-    # 수정사항 2: 이모지 금지 및 길이 제한 추가
+    # 추가사항: 새로고침 버튼 (결과물 비우기)
+    st.markdown('<div class="refresh-btn">', unsafe_allow_html=True)
+    if st.button("🔄 결과 새로고침 (Refresh)"):
+        reset_results()
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     strict_rule = "\n[⚠️ 절대 준수 규칙: 이모티콘(이모지) 사용 절대 금지. 볼드(**)나 # 등 마크다운 형식 금지. 오직 순수 텍스트만 출력할 것.]"
 
     b_wash = st.button("✨ 문구 워싱")
@@ -101,8 +115,6 @@ with col_in:
 
 with col_out:
     st.markdown('<div class="section-title">3. 결과물 확인</div>', unsafe_allow_html=True)
-    
-    # 수정사항 1: 세션 스테이트를 사용하여 버튼 클릭 시마다 결과 보존
     
     # 1) 문구 워싱 섹션
     if b_wash:
@@ -119,8 +131,7 @@ with col_out:
     if b_make:
         if raw_text:
             with st.spinner("인스타그램 캡션 제작 중..."):
-                # 수정사항 2 적용: 이모지 금지 및 기존 캡션 길이 학습 강조
-                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}\n\n위 자료를 바탕으로 인스타그램용 캡션을 제작해줘. 이모티콘은 하나도 쓰지 말고, [말투 가이드]에 나온 기존 캡션들과 비슷한 수준의 길이로 작성해줘."
+                prompt = f"{strict_rule}\n\n[말투 가이드]\n{style_guide}\n\n[추가 요청]\n{user_guide}\n\n[자료]\n{raw_text}\n\n위 자료를 바탕으로 인스타그램용 캡션을 제작해줘. 이모티콘은 하나도 쓰지 말고, [말투 가이드]의 기존 캡션들과 비슷한 수준의 길이로 작성해줘."
                 st.session_state.res_make = call_ai(prompt)
         else: st.warning("내용을 입력해주세요.")
 
@@ -160,4 +171,4 @@ with col_out:
         st.markdown(f'<div class="content-box"><strong>[썸네일 문구 제안]</strong>\n\n{st.session_state.res_thumb}</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
-st.sidebar.caption("© 2026 Fastpaper Washing Bot v2.3")
+st.sidebar.caption("© 2026 Fastpaper Washing Bot v2.5")
