@@ -114,7 +114,7 @@ with col_out:
     if b_wash:
         if raw_text:
             with st.spinner("워싱 중..."):
-                prompt = f"{strict_rule}\n{style_instruction}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n[지시] 내용을 패스트페이퍼 스타일로 워싱하되, [기존문구]와 [워싱결과]로 구분해줘. 길이는 가이드의 캡션들처럼 간결하게 유지해."
+                prompt = f"{strict_rule}\n{style_instruction}\n\n[추가 요청]\n{user_guide}\n\n[원본]\n{raw_text}\n\n[지시] 내용을 패스트페이퍼 스타일로 워싱하되, 길이는 가이드의 캡션들처럼 간결하게 유지해."
                 st.session_state.res_wash = call_ai(prompt)
         else: st.warning("내용 입력 필요")
 
