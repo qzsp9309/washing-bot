@@ -58,9 +58,11 @@ def call_ai(prompt, image_b64=None):
     if image_b64:
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}})
         
+    # app.py의 call_ai 함수 내 payload 부분 찾기
     payload = {
-        "model": "google/gemini-2.0-flash-001", # 이미지 분석 효율 최상 모델
-        "messages": [{"role": "user", "content": content}]
+    "model": "google/gemini-pro-1.5-exp-0801", # 혹은 "google/gemini-2.0-flash-001"
+    "messages": [{"role": "user", "content": content}]
+}
     }
     
     try:
