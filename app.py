@@ -1,14 +1,19 @@
 import html
 import json
 import re
+import io
+import shutil
+import subprocess
 from collections import Counter
 
 import gspread
 import requests
 import streamlit as st
 from google.oauth2.service_account import Credentials
+from docx import Document
+import fitz
 
-st.set_page_config(page_title="패페 워싱봇 v3.0", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="패페 워싱봇 v3.1", page_icon="✍️", layout="wide")
 
 CATEGORIES = ["단체", "라이프", "뷰티", "엔터테인먼트", "테크", "패션", "푸드"]
 MODEL = "openai/gpt-4.1-mini"
@@ -122,6 +127,47 @@ def infer_category(posts, source_text):
     return scores.most_common(1)[0][0] if scores and scores.most_common(1)[0][1] > 0 else "라이프"
 
 
+def extract_attachment(uploaded):
+    """PDF / DOCX / legacy DOC text extraction; no file is sent anywhere until AI action."""
+    suffix = uploaded.name.rsplit(".", 1)[-1].lower()
+    data = uploaded.getvalue()
+    if len(data) > 20 * 1024 * 1024:
+        raise ValueError("파일당 20MB 이하만 지원합니다.")
+    if suffix == "pdf":
+        with fitz.open(stream=data, filetype="pdf") as pdf:
+            if len(pdf) > 80:
+                raise ValueError("PDF는 최대 80페이지까지 지원합니다.")
+            content = "\n".join(page.get_text(sort=True) for page in pdf)
+    elif suffix == "docx":
+        document = Document(io.BytesIO(data))
+        blocks = [p.text for p in document.paragraphs if p.text.strip()]
+        for table in document.tables:
+            for row in table.rows:
+                blocks.append(" | ".join(cell.text for cell in row.cells))
+        content = "\n".join(blocks)
+    elif suffix == "doc":
+        if not shutil.which("antiword"):
+            raise ValueError("구형 .doc 파일은 현재 서버에서 지원하지 않습니다. Word에서 .docx로 저장해 업로드해 주세요.")
+        result = subprocess.run(["antiword", "-"], input=data, capture_output=True, timeout=20)
+        if result.returncode != 0:
+            raise ValueError(".doc 파일을 읽지 못했습니다. .docx로 변환해 주세요.")
+        content = result.stdout.decode("utf-8", errors="replace")
+    else:
+        raise ValueError("PDF 또는 Word 파일만 지원합니다.")
+    if not content.strip():
+        raise ValueError("추출 가능한 텍스트가 없습니다. 스캔 이미지 PDF는 텍스트 인식이 필요합니다.")
+    return content.strip()
+
+
+def combine_source(raw_text, attachments):
+    sections = []
+    if raw_text.strip():
+        sections.append("[직접 입력한 자료]\n" + raw_text.strip())
+    for name, text in attachments:
+        sections.append(f"[첨부파일: {name}]\n{text}")
+    return "\n\n".join(sections)
+
+
 def call_ai(prompt):
     try:
         key = st.secrets["openrouter_api_key"]
@@ -134,8 +180,8 @@ def call_ai(prompt):
                     {"role": "system", "content": "당신은 FASTPAPER의 한국어 SNS 카피 에디터입니다. 자료의 사실관계를 지키고, 참고 캡션의 문체만 반영하세요."},
                     {"role": "user", "content": prompt},
                 ],
-                "temperature": 0.75,
-                "max_tokens": 1200,
+                "temperature": 0.55,
+                "max_tokens": 1800,
             },
             timeout=90,
         )
@@ -166,27 +212,52 @@ def make_prompt(task, source, guide, category, examples):
         f"[참고 {i}] 카테고리: {p['category']} / 브랜드: {p['brand'] or '미기재'}\n{p['caption'][:900]}"
         for i, p in enumerate(examples, 1)
     )
-    instructions = {
-        "wash": "원문에 있는 사실과 고유명사는 유지하고, 표현만 FASTPAPER의 자연스럽고 간결한 인스타그램 문체로 다듬으세요. 근거 없는 경험담, 평가, 사실을 추가하지 마세요.",
-        "make": "제공된 자료로 FASTPAPER 인스타그램 캡션 1개를 새로 작성하세요. 핵심 정보가 빠지지 않도록 하되 참고 캡션과 유사한 호흡과 분량으로 작성하세요. 직접 경험하지 않은 내용을 체험담처럼 쓰지 마세요.",
-        "thumb": "콘텐츠의 핵심을 살린 썸네일 카피를 서로 다른 각도로 8개 제안하세요. 각 문구는 가급적 20~30자 내외로 간결하게 작성하고, 1~8 번호를 붙여 빈 줄로 구분하세요. 밈을 억지로 사용하지 마세요.",
+    common = """[공통 편집 원칙]
+- FASTPAPER의 실제 기자가 독자에게 소식을 전하는 자연스러운 매거진 에디토리얼 톤을 사용하세요.
+- 제공 자료의 사실, 인물명, 브랜드명, 캠페인명, 필수 제품명, 제품별 특징을 정확히 유지하세요.
+- 광고 가이드의 필수 조건을 누락하지 마세요. 근거 없는 특징, 평가, 체험, 가격, 출시일을 만들어내지 마세요.
+- 브랜드 보도자료 문장을 그대로 늘이거나 홍보성 수식어를 추가하지 마세요.
+- '자랑합니다', '완벽한', '스타일리시한', '지금 만나보세요', '스타일을 완성해보세요' 등 상투적 판촉 표현을 가급적 피하세요.
+- 비슷한 정보와 표현은 반복하지 말고, 문장별로 정보의 역할을 나누세요.
+- 과거 참고 캡션은 문장 리듬, 정보 배치, 문단 호흡을 학습하는 데만 사용하세요. 다른 게시글의 사실을 현재 글에 섞거나 문장을 복제하지 마세요.
+- 추가 요청은 위 사실관계 및 필수 정보 조건을 지키는 범위에서 반영하세요.
+- 자료에 '필수', '반드시', '유의' 등 조건이 있으면 먼저 찾아 반영하세요.
+- 최종 출력 전에 필수 고유명사/제품명 누락, 광고 문구 과다, 사실 추가, 중복, 문단 흐름을 자체 점검하고 완성본만 출력하세요.
+- 결과물에 마크다운 볼드(**)나 설명문, 불필요한 이모지를 넣지 마세요."""
+    task_rules = {
+        "wash": """[문구 워싱]
+- 원문의 정보와 핵심 메시지는 유지하되 어색한 문장, 과한 홍보 표현, 중복을 줄여 주세요.
+- 이미 명시된 #광고, 해시태그, 에디터/이미지 출처는 임의로 삭제하거나 변경하지 마세요.
+- 원문에 없는 에디터명, 이미지 계정, 태그를 새로 만들지 마세요.
+- 원문의 구조를 존중하면서 자연스러운 문단 구성을 만드세요.""",
+        "make": """[캡션 제작]
+- 핵심 소식을 소개하는 1문단 → 인물·제품·특징을 연결하는 2문단 → 독자 관점의 자연스러운 마무리 3문단을 기본으로 하되, 내용에 따라 문단 수를 조절하세요.
+- 첫 문단에서 누가 무엇을 공개/발표/선보였는지 명확히 전달하세요. 계절감만으로 시작하는 막연한 광고식 도입을 피하세요.
+- 제품별 특징은 해당 인물과 제품명에 정확히 연결하세요. 모든 제품 특징을 한 문장에 몰아넣지 마세요.
+- '선보입니다', '완성했는데요', '확인해 보세요' 같은 자연스러운 기사형 종결을 문맥에 맞게 사용하되 같은 어미를 과하게 반복하지 마세요.
+- 광고 콘텐츠임이 자료에 명시되어 있으면 첫 줄에 '#광고'를 표시하세요. 썸네일 문구가 제공되지 않았다면 임의로 정하거나 '첫 문장은 썸네일 문구' 같은 작업 지침을 본문에 출력하지 마세요.
+- 에디터명·이미지 출처는 자료에 명시된 경우에만 기재하세요. 담당자를 추측하거나 임의로 생성하지 마세요.
+- 해시태그는 가이드가 제공되면 우선 반영하고, 없으면 핵심 브랜드·인물·주제 위주로 적은 수만 제안하세요. 필요하면 '댓글태그)'를 별도 구분하세요.
+- 해시태그를 제외한 본문은 과도하게 길게 쓰지 마세요.""",
+        "thumb": """[썸네일 문구 추천]
+- 독자가 클릭할 만한 사실 기반의 서로 다른 앵글 8개를 제안하세요.
+- 문구당 가급적 20~30자 내외로 간결하게 작성하고 1~8 번호를 붙여 빈 줄로 구분하세요.
+- 근거 없는 과장, 확인되지 않은 사실, 억지 밈은 사용하지 마세요.
+- 썸네일 문구만 출력하고 해시태그나 에디터 정보를 붙이지 마세요.""",
     }
-    return f"""[작업] {instructions[task]}
+    return f"""{common}
+
+{task_rules[task]}
+
 [콘텐츠 카테고리] {category}
-[참고 캡션의 사용 원칙]
-- 아래 캡션은 문체, 문장 길이, 톤을 참고하기 위한 예시입니다.
-- 참고 캡션의 브랜드, 사실, 행사, 인물 정보를 현재 글에 섞지 마세요.
-- 특정 표현을 그대로 복사하지 마세요.
-- 결과에는 이모지, 해시태그, 볼드(**) 등의 마크다운을 쓰지 마세요.
-- 추가 요청이 있으면 사실관계를 해치지 않는 범위에서 반영하세요.
 
-[과거 FASTPAPER 게시글 참고]
-{examples_text if examples_text else '참고 게시글 없음. 제공된 자료에 근거하여 작성하세요.'}
+[과거 FASTPAPER 게시글 참고 — 사실 정보로 사용 금지]
+{examples_text if examples_text else '참고 게시글 없음. 현재 자료에 근거하여 작성하세요.'}
 
-[추가 요청]
+[사용자 추가 가이드]
 {guide or '없음'}
 
-[현재 자료]
+[현재 자료 및 첨부 문서 — 사실 정보의 유일한 근거]
 {source}
 """
 
@@ -226,10 +297,22 @@ col_in, col_out = st.columns([1, 1], gap="large")
 with col_in:
     st.markdown('<div class="section-title">1. 자료 입력</div>', unsafe_allow_html=True)
     raw_text = st.text_area("📄 텍스트 입력 (원본/보도자료)", height=250)
+    uploaded_files = st.file_uploader("📎 PDF / Word 파일 첨부", type=["pdf", "docx", "doc"], accept_multiple_files=True, help="파일당 20MB, PDF 최대 80페이지. 이미지로만 된 스캔 PDF는 텍스트를 추출할 수 없습니다.")
+    attachments = []
+    for uploaded in uploaded_files or []:
+        try:
+            extracted = extract_attachment(uploaded)
+            attachments.append((uploaded.name, extracted))
+            st.caption(f"✓ {uploaded.name} · 텍스트 {len(extracted):,}자 추출")
+        except Exception as exc:
+            st.warning(f"{uploaded.name}: {exc}")
+    combined_source = combine_source(raw_text, attachments)
+    if len(combined_source) > 60000:
+        st.warning("자료가 60,000자를 초과했습니다. API 요청 한도를 고려해 일부 내용을 줄여 주세요.")
     user_guide = st.text_area("💡 AI 제작 가이드", height=120, placeholder="예: 제품 특징을 강조해줘, 캡션은 짧게 써줘")
     category_choice = st.selectbox("📂 카테고리", ["자동"] + CATEGORIES, help="자동은 입력한 글과 과거 캡션을 비교해 카테고리를 추천합니다.")
-    if raw_text.strip() and posts:
-        effective_category = infer_category(posts, raw_text) if category_choice == "자동" else category_choice
+    if combined_source.strip() and posts:
+        effective_category = infer_category(posts, combined_source) if category_choice == "자동" else category_choice
         st.caption(f"적용 카테고리: {effective_category}" + (" (자동 추천)" if category_choice == "자동" else ""))
     else:
         effective_category = category_choice if category_choice != "자동" else "라이프"
@@ -246,14 +329,16 @@ with col_out:
     st.markdown('<div class="section-title">3. 결과물 확인</div>', unsafe_allow_html=True)
     task = "wash" if b_wash else "make" if b_make else "thumb" if b_thumb else None
     if task:
-        if not raw_text.strip():
+        if not combined_source.strip():
             st.warning("내용을 입력해 주세요.")
+        elif len(combined_source) > 60000:
+            st.warning("자료를 60,000자 이하로 줄여 주세요.")
         else:
-            selected = select_examples(posts, raw_text, effective_category)
+            selected = select_examples(posts, combined_source, effective_category)
             # 선택 카테고리에 해당하는 게시글이 없으면 최근 전체 게시글로 보완
             if not selected and posts:
                 selected = select_examples(posts, raw_text, "자동")
-            prompt = make_prompt(task, raw_text, user_guide, effective_category, selected)
+            prompt = make_prompt(task, combined_source, user_guide, effective_category, selected)
             with st.spinner("패스트페이퍼 스타일로 작성 중..."):
                 result = call_ai(prompt)
             if result:
@@ -275,4 +360,4 @@ with col_out:
                 st.text(p["caption"][:500])
                 st.divider()
 
-st.sidebar.caption("© 2026 Fastpaper Washing Bot v3.0")
+st.sidebar.caption("© 2026 Fastpaper Washing Bot v3.1")
