@@ -49,17 +49,19 @@ def service_account_info():
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_posts():
-    # v2.6에서 정상 작동하던 인증 및 스프레드시트 조회 방식 복원
-    info = service_account_info()
-    creds = Credentials.from_service_account_info(
-        info,
-        scopes=[
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-        ],
-    )
+    # v2.6에서 사용하던 인증/시트 열기 방식 그대로 유지
+    raw = st.secrets["gcp_service_account"]
+    info = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(info, scopes=scope)
     client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
+
+    # 별도 spreadsheet_id Secret은 요구하지 않음.
+    # 기존 v2.6처럼 문서명으로 열고, 그 안의 rpa 탭을 선택.
+    spreadsheet = client.open("fastpaper IG like RPA")
     archive = spreadsheet.worksheet("rpa").get_all_values()
 
     posts = []
@@ -71,6 +73,18 @@ def load_posts():
             continue
         posts.append({"row": sheet_row, "brand": brand, "category": category, "caption": caption})
     return posts
+
+
+def diagnose_sheet_access():
+    """연결 오류 시에만 실행. 문서명과 서비스 계정 접근 권한을 진단."""
+    raw = st.secrets["gcp_service_account"]
+    info = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(info, scopes=scope)
+    client = gspread.authorize(creds)
+    accessible = client.list_spreadsheet_files()
+    names = [x.get("name", "") for x in accessible]
+    return info.get("client_email", ""), names
 
 
 def tokens(text):
@@ -190,6 +204,17 @@ status_col, refresh_col = st.columns([4, 1])
 with status_col:
     if data_error:
         st.warning(f"구글 시트 연결 오류: {data_error}")
+        if "SpreadsheetNotFound" in data_error:
+            st.info("기존 v2.6 인증·시트 연결 코드를 그대로 사용 중입니다. 이 오류는 현재 서비스 계정에서 해당 이름의 문서를 찾지 못한다는 뜻입니다. 아래 진단 버튼으로 권한/문서명을 확인해 주세요.")
+            if st.button("🔎 구글 시트 연결 진단", key="diagnose_sheet"):
+                try:
+                    email, names = diagnose_sheet_access()
+                    st.write(f"현재 서비스 계정: `{email}`")
+                    st.write(f"접근 가능한 스프레드시트 수: {len(names)}")
+                    st.write("문서 이름 (최대 20개):", names[:20])
+                    st.caption("기존 문서가 목록에 없으면 해당 서비스 계정 이메일에 구글 시트 공유 권한을 부여해야 합니다. 목록에 다른 이름으로 있으면 SHEET_NAME을 그 이름으로 변경하세요.")
+                except Exception as diag_exc:
+                    st.error(f"진단 실패: {type(diag_exc).__name__}: {diag_exc}")
     else:
         st.caption(f"rpa 게시글 {len(posts):,}개 연결됨 · E열 브랜드 / G열 카테고리 / H열 캡션 · 10분 캐싱")
 with refresh_col:
