@@ -49,22 +49,24 @@ def service_account_info():
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_posts():
+    # v2.6에서 정상 작동하던 인증 및 스프레드시트 조회 방식 복원
     info = service_account_info()
     creds = Credentials.from_service_account_info(
         info,
-scopes=[
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-],
+        scopes=[
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ],
     )
     client = gspread.authorize(creds)
-    # E:H 네 열만 요청. E=브랜드, G=카테고리, H=캡션
-    rows = client.open(SHEET_NAME).worksheet(TAB_NAME).get("E2:H")
+    spreadsheet = client.open("fastpaper IG like RPA")
+    archive = spreadsheet.worksheet("rpa").get_all_values()
+
     posts = []
-    for sheet_row, row in enumerate(rows, start=2):
-        brand = str(row[0]).strip() if len(row) > 0 else ""
-        category = str(row[2]).strip() if len(row) > 2 else ""
-        caption = str(row[3]).strip() if len(row) > 3 else ""
+    for sheet_row, row in enumerate(archive[1:], start=2):
+        brand = str(row[4]).strip() if len(row) > 4 else ""  # E열
+        category = str(row[6]).strip() if len(row) > 6 else ""  # G열
+        caption = str(row[7]).strip() if len(row) > 7 else ""  # H열
         if not caption or category not in CATEGORIES:
             continue
         posts.append({"row": sheet_row, "brand": brand, "category": category, "caption": caption})
