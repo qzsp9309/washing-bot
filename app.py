@@ -67,7 +67,7 @@ def call_ai(prompt):
         }
 
         payload = {
-            "model": "google/gemini-2.0-flash-001",
+            "model": "openai/gpt-4.1-mini",
             "messages": [
                 {"role": "user", "content": prompt}
             ]
