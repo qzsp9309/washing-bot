@@ -59,7 +59,7 @@ def load_posts():
         ],
     )
     client = gspread.authorize(creds)
-    spreadsheet = client.open("fastpaper IG like RPA")
+    spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
     archive = spreadsheet.worksheet("rpa").get_all_values()
 
     posts = []
