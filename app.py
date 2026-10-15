@@ -58,16 +58,39 @@ def load_data():
     except: return [], ""
 
 def call_ai(prompt):
-    api_key = st.secrets["openrouter_api_key"]
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": "google/gemini-2.0-flash-001", 
-        "messages": [{"role": "user", "content": prompt}]
-    }
     try:
-        res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        return res.json()['choices'][0]['message']['content']
-    except: return "연결 실패"
+        api_key = st.secrets["openrouter_api_key"]
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "google/gemini-2.0-flash-001",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+
+        if res.status_code != 200:
+            st.error(f"API 오류: {res.status_code}")
+            st.code(res.text[:1000])
+            return "AI 연결 실패"
+
+        data = res.json()
+        return data["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        st.error(f"연결 오류: {type(e).__name__}: {e}")
+        return "AI 연결 실패"
 
 # --- 3. UI 레이아웃 ---
 st.markdown('<div class="main-title">FASTPAPER<br>WASHING BOT</div>', unsafe_allow_html=True)
