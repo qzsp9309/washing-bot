@@ -12,7 +12,7 @@ st.set_page_config(page_title="패페 워싱봇 v3.0", page_icon="✍️", layou
 
 CATEGORIES = ["단체", "라이프", "뷰티", "엔터테인먼트", "테크", "패션", "푸드"]
 MODEL = "openai/gpt-4.1-mini"
-SHEET_NAME = "fastpaper IG like RPA"
+SHEET_NAME = "★ fastpaper IG like RPA"
 TAB_NAME = "rpa"
 MAX_EXAMPLES = 12
 
@@ -61,7 +61,7 @@ def load_posts():
 
     # 별도 spreadsheet_id Secret은 요구하지 않음.
     # 기존 v2.6처럼 문서명으로 열고, 그 안의 rpa 탭을 선택.
-    spreadsheet = client.open("fastpaper IG like RPA")
+    spreadsheet = client.open("★ fastpaper IG like RPA")
     archive = spreadsheet.worksheet("rpa").get_all_values()
 
     posts = []
