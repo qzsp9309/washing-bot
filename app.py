@@ -52,8 +52,10 @@ def load_posts():
     info = service_account_info()
     creds = Credentials.from_service_account_info(
         info,
-        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly",
-                "https://www.googleapis.com/auth/drive.readonly"],
+scopes=[
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+],
     )
     client = gspread.authorize(creds)
     # E:H 네 열만 요청. E=브랜드, G=카테고리, H=캡션
